@@ -1,14 +1,423 @@
 from flask import Blueprint, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
+import json
+from ...services import IntegrationService
 
 bp = Blueprint('alerts', __name__, url_prefix='/api/v1/alerts')
+
+# Global integration service instance
+integration_service = IntegrationService()
+
+logger = logging.getLogger(__name__)
+
+# In-memory storage for alerts (in production, this should be in database)
+alerts_storage = []
+alert_rules = []
 
 @bp.route('/', methods=['GET'])
 def list_alerts():
     """List all alerts"""
-    return jsonify({
-        'success': True,
-        'data': [],
-        'message': 'Alerts endpoint - coming soon',
-        'timestamp': datetime.utcnow().isoformat()
-    })
+    try:
+        # Get query parameters
+        status = request.args.get('status')
+        severity = request.args.get('severity')
+        limit = request.args.get('limit', 50, type=int)
+        
+        filtered_alerts = alerts_storage.copy()
+        
+        # Apply filters
+        if status:
+            filtered_alerts = [a for a in filtered_alerts if a.get('status') == status]
+        if severity:
+            filtered_alerts = [a for a in filtered_alerts if a.get('severity') == severity]
+        
+        # Sort by timestamp (newest first) and limit
+        filtered_alerts.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        filtered_alerts = filtered_alerts[:limit]
+        
+        return jsonify({
+            'success': True,
+            'data': filtered_alerts,
+            'count': len(filtered_alerts),
+            'total': len(alerts_storage),
+            'message': 'Alerts retrieved successfully',
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error listing alerts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'data': [],
+            'message': f'Error retrieving alerts: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/', methods=['POST'])
+def create_alert():
+    """Create a new alert"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Alert data is required'
+            }), 400
+        
+        # Validate required fields
+        required_fields = ['title', 'message', 'severity']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'message': f'Required field missing: {field}'
+                }), 400
+        
+        # Create alert object
+        alert = {
+            'id': f"alert_{len(alerts_storage) + 1}_{int(datetime.utcnow().timestamp())}",
+            'title': data['title'],
+            'message': data['message'],
+            'severity': data['severity'],
+            'status': data.get('status', 'active'),
+            'category': data.get('category', 'general'),
+            'source': data.get('source', 'manual'),
+            'timestamp': datetime.utcnow().isoformat(),
+            'acknowledged_at': None,
+            'acknowledged_by': None,
+            'resolved_at': None,
+            'resolved_by': None,
+            'metadata': data.get('metadata', {})
+        }
+        
+        # Add to storage
+        alerts_storage.append(alert)
+        
+        # Send alert notifications if configured
+        send_alert_notifications(alert)
+        
+        return jsonify({
+            'success': True,
+            'data': alert,
+            'message': 'Alert created successfully'
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating alert: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error creating alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/<alert_id>', methods=['GET'])
+def get_alert(alert_id):
+    """Get alert by ID"""
+    try:
+        alert = next((a for a in alerts_storage if a.get('id') == alert_id), None)
+        if alert:
+            return jsonify({
+                'success': True,
+                'data': alert,
+                'message': 'Alert retrieved successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found'
+            }), 404
+    except Exception as e:
+        logger.error(f"Error getting alert {alert_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error retrieving alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/<alert_id>', methods=['PUT'])
+def update_alert(alert_id):
+    """Update alert by ID"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Update data is required'
+            }), 400
+        
+        alert = next((a for a in alerts_storage if a.get('id') == alert_id), None)
+        if not alert:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found'
+            }), 404
+        
+        # Update allowed fields
+        allowed_fields = ['title', 'message', 'severity', 'status', 'category']
+        for field in allowed_fields:
+            if field in data:
+                alert[field] = data[field]
+        
+        # Handle status changes
+        if 'status' in data:
+            if data['status'] == 'acknowledged':
+                alert['acknowledged_at'] = datetime.utcnow().isoformat()
+                alert['acknowledged_by'] = data.get('acknowledged_by', 'system')
+            elif data['status'] == 'resolved':
+                alert['resolved_at'] = datetime.utcnow().isoformat()
+                alert['resolved_by'] = data.get('resolved_by', 'system')
+        
+        alert['updated_at'] = datetime.utcnow().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': alert,
+            'message': 'Alert updated successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating alert {alert_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error updating alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/<alert_id>/acknowledge', methods=['POST'])
+def acknowledge_alert(alert_id):
+    """Acknowledge an alert"""
+    try:
+        data = request.get_json() or {}
+        user = data.get('user', 'system')
+        
+        alert = next((a for a in alerts_storage if a.get('id') == alert_id), None)
+        if not alert:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found'
+            }), 404
+        
+        if alert.get('status') == 'resolved':
+            return jsonify({
+                'success': False,
+                'message': 'Cannot acknowledge a resolved alert'
+            }), 400
+        
+        alert['status'] = 'acknowledged'
+        alert['acknowledged_at'] = datetime.utcnow().isoformat()
+        alert['acknowledged_by'] = user
+        alert['updated_at'] = datetime.utcnow().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': alert,
+            'message': 'Alert acknowledged successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error acknowledging alert {alert_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error acknowledging alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/<alert_id>/resolve', methods=['POST'])
+def resolve_alert(alert_id):
+    """Resolve an alert"""
+    try:
+        data = request.get_json() or {}
+        user = data.get('user', 'system')
+        resolution_notes = data.get('resolution_notes', '')
+        
+        alert = next((a for a in alerts_storage if a.get('id') == alert_id), None)
+        if not alert:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found'
+            }), 404
+        
+        alert['status'] = 'resolved'
+        alert['resolved_at'] = datetime.utcnow().isoformat()
+        alert['resolved_by'] = user
+        alert['resolution_notes'] = resolution_notes
+        alert['updated_at'] = datetime.utcnow().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': alert,
+            'message': 'Alert resolved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error resolving alert {alert_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error resolving alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/<alert_id>', methods=['DELETE'])
+def delete_alert(alert_id):
+    """Delete alert by ID"""
+    try:
+        alert = next((a for a in alerts_storage if a.get('id') == alert_id), None)
+        if not alert:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found'
+            }), 404
+        
+        alerts_storage.remove(alert)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Alert deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting alert {alert_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error deleting alert: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/rules', methods=['GET'])
+def list_alert_rules():
+    """List all alert rules"""
+    try:
+        return jsonify({
+            'success': True,
+            'data': alert_rules,
+            'count': len(alert_rules),
+            'message': 'Alert rules retrieved successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error listing alert rules: {str(e)}")
+        return jsonify({
+            'success': False,
+            'data': [],
+            'message': f'Error retrieving alert rules: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/rules', methods=['POST'])
+def create_alert_rule():
+    """Create a new alert rule"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Rule data is required'
+            }), 400
+        
+        # Validate required fields
+        required_fields = ['name', 'condition', 'severity']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'message': f'Required field missing: {field}'
+                }), 400
+        
+        # Create rule object
+        rule = {
+            'id': f"rule_{len(alert_rules) + 1}_{int(datetime.utcnow().timestamp())}",
+            'name': data['name'],
+            'description': data.get('description', ''),
+            'condition': data['condition'],
+            'severity': data['severity'],
+            'enabled': data.get('enabled', True),
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        # Add to storage
+        alert_rules.append(rule)
+        
+        return jsonify({
+            'success': True,
+            'data': rule,
+            'message': 'Alert rule created successfully'
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating alert rule: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error creating alert rule: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/stats', methods=['GET'])
+def get_alert_stats():
+    """Get alert statistics"""
+    try:
+        total_alerts = len(alerts_storage)
+        active_alerts = len([a for a in alerts_storage if a.get('status') == 'active'])
+        acknowledged_alerts = len([a for a in alerts_storage if a.get('status') == 'acknowledged'])
+        resolved_alerts = len([a for a in alerts_storage if a.get('status') == 'resolved'])
+        
+        # Count by severity
+        severity_counts = {}
+        for alert in alerts_storage:
+            severity = alert.get('severity', 'unknown')
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        
+        # Count by category
+        category_counts = {}
+        for alert in alerts_storage:
+            category = alert.get('category', 'unknown')
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        stats = {
+            'total_alerts': total_alerts,
+            'active_alerts': active_alerts,
+            'acknowledged_alerts': acknowledged_alerts,
+            'resolved_alerts': resolved_alerts,
+            'by_severity': severity_counts,
+            'by_category': category_counts,
+            'total_rules': len(alert_rules),
+            'enabled_rules': len([r for r in alert_rules if r.get('enabled')])
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': stats,
+            'message': 'Alert statistics retrieved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting alert stats: {str(e)}")
+        return jsonify({
+            'success': False,
+            'data': {},
+            'message': f'Error retrieving alert statistics: {str(e)}',
+            'error': str(e)
+        }), 500
+
+def send_alert_notifications(alert):
+    """Send alert notifications to configured channels"""
+    try:
+        # This would integrate with Slack, email, or other notification services
+        # For now, just log the alert
+        logger.info(f"Alert notification: {alert['severity'].upper()} - {alert['title']}: {alert['message']}")
+        
+        # TODO: Implement actual notification sending
+        # - Slack webhook
+        # - Email via SMTP
+        # - Webhook to external systems
+        
+    except Exception as e:
+        logger.error(f"Error sending alert notifications: {str(e)}")
+
+def check_alert_rules():
+    """Check alert rules and create alerts if conditions are met"""
+    try:
+        # This would be called periodically to check for conditions
+        # For now, just a placeholder
+        pass
+    except Exception as e:
+        logger.error(f"Error checking alert rules: {str(e)}")
