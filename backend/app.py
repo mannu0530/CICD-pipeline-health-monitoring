@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 def create_app():
     """Create and configure Flask application"""
-    
+
     # Import here to avoid circular imports
     from app import create_app as create_flask_app
-    
+
     # Get configuration from environment
     config_name = os.environ.get('FLASK_ENV', 'development')
-    
+
     # Create Flask app
     app = create_flask_app(config_name)
     

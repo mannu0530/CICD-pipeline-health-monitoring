@@ -20,8 +20,7 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
     # Slack configuration
-    SLACK_BOT_TOKEN = os.environ.get('SLACK_BOT_TOKEN')
-    SLACK_CHANNEL_ID = os.environ.get('SLACK_CHANNEL_ID')
+    SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
     
     # Email configuration
     SMTP_SERVER = os.environ.get('SMTP_SERVER')

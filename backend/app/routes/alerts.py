@@ -2,7 +2,10 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 import logging
 import json
-from ...services import IntegrationService
+import random
+import requests
+from services import IntegrationService
+import os
 
 bp = Blueprint('alerts', __name__, url_prefix='/api/v1/alerts')
 
@@ -359,19 +362,19 @@ def get_alert_stats():
         active_alerts = len([a for a in alerts_storage if a.get('status') == 'active'])
         acknowledged_alerts = len([a for a in alerts_storage if a.get('status') == 'acknowledged'])
         resolved_alerts = len([a for a in alerts_storage if a.get('status') == 'resolved'])
-        
+
         # Count by severity
         severity_counts = {}
         for alert in alerts_storage:
             severity = alert.get('severity', 'unknown')
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
-        
+
         # Count by category
         category_counts = {}
         for alert in alerts_storage:
             category = alert.get('category', 'unknown')
             category_counts[category] = category_counts.get(category, 0) + 1
-        
+
         stats = {
             'total_alerts': total_alerts,
             'active_alerts': active_alerts,
@@ -382,13 +385,13 @@ def get_alert_stats():
             'total_rules': len(alert_rules),
             'enabled_rules': len([r for r in alert_rules if r.get('enabled')])
         }
-        
+
         return jsonify({
             'success': True,
             'data': stats,
             'message': 'Alert statistics retrieved successfully'
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting alert stats: {str(e)}")
         return jsonify({
@@ -398,18 +401,221 @@ def get_alert_stats():
             'error': str(e)
         }), 500
 
+@bp.route('/demo/generate', methods=['POST'])
+def generate_demo_alerts():
+    """Generate random demo alerts for testing"""
+    try:
+        data = request.get_json() or {}
+        count = data.get('count', 5)
+        count = min(count, 20)  # Limit to 20 alerts at once
+
+        # Sample data for randomization
+        severities = ['critical', 'high', 'medium', 'low', 'info']
+        categories = ['pipeline', 'build', 'deployment', 'infrastructure', 'security', 'performance']
+        statuses = ['active', 'acknowledged', 'resolved']
+        sources = ['jenkins', 'github', 'gitlab', 'manual', 'monitoring']
+
+        pipeline_titles = [
+            'Pipeline Failed: Build #1234',
+            'Pipeline Timeout: Deployment Stuck',
+            'Pipeline Error: Test Suite Failed',
+            'Pipeline Warning: Slow Performance',
+            'Pipeline Success: All Tests Passed',
+            'Pipeline Issue: Resource Limit Exceeded',
+            'Pipeline Alert: Security Scan Failed',
+            'Pipeline Notification: New Release Available'
+        ]
+
+        build_messages = [
+            'Build failed due to compilation errors',
+            'Unit tests failed with 3 test cases',
+            'Integration tests timed out after 30 minutes',
+            'Code coverage below threshold (75%)',
+            'Security vulnerability detected in dependencies',
+            'Build artifacts corrupted during upload',
+            'Docker image build failed',
+            'Database migration script error'
+        ]
+
+        generated_alerts = []
+
+        for i in range(count):
+            severity = random.choice(severities)
+            category = random.choice(categories)
+            status = random.choice(statuses)
+            source = random.choice(sources)
+
+            # Generate appropriate title and message based on category
+            if category == 'pipeline':
+                title = random.choice(pipeline_titles)
+                message = f"Pipeline issue detected in {source} integration"
+            elif category == 'build':
+                title = f"Build Alert: {random.choice(['Failed', 'Warning', 'Error', 'Timeout'])}"
+                message = random.choice(build_messages)
+            elif category == 'deployment':
+                title = f"Deployment Alert: {random.choice(['Failed', 'Stuck', 'Rollback', 'Timeout'])}"
+                message = f"Deployment issue in production environment"
+            elif category == 'infrastructure':
+                title = f"Infrastructure Alert: {random.choice(['High CPU', 'Memory Leak', 'Disk Full', 'Network Issue'])}"
+                message = f"System resource utilization is critical"
+            elif category == 'security':
+                title = f"Security Alert: {random.choice(['Vulnerability', 'Access Denied', 'Suspicious Activity'])}"
+                message = f"Security incident detected and logged"
+            else:  # performance
+                title = f"Performance Alert: {random.choice(['Slow Response', 'High Latency', 'Memory Usage'])}"
+                message = f"Performance metrics exceed thresholds"
+
+            alert = {
+                'id': f"demo_alert_{len(alerts_storage) + i + 1}_{int(datetime.utcnow().timestamp())}",
+                'title': title,
+                'message': message,
+                'severity': severity,
+                'status': status,
+                'category': category,
+                'source': source,
+                'timestamp': datetime.utcnow().isoformat(),
+                'acknowledged_at': datetime.utcnow().isoformat() if status in ['acknowledged', 'resolved'] else None,
+                'acknowledged_by': 'demo_user' if status in ['acknowledged', 'resolved'] else None,
+                'resolved_at': datetime.utcnow().isoformat() if status == 'resolved' else None,
+                'resolved_by': 'demo_user' if status == 'resolved' else None,
+                'metadata': {
+                    'demo': True,
+                    'generated_at': datetime.utcnow().isoformat(),
+                    'random_seed': random.randint(1000, 9999)
+                }
+            }
+
+            alerts_storage.append(alert)
+            generated_alerts.append(alert)
+
+            # Send notifications for active alerts
+            if status == 'active':
+                send_alert_notifications(alert)
+
+        return jsonify({
+            'success': True,
+            'data': generated_alerts,
+            'count': len(generated_alerts),
+            'message': f'Successfully generated {len(generated_alerts)} demo alerts'
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error generating demo alerts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error generating demo alerts: {str(e)}',
+            'error': str(e)
+        }), 500
+
+@bp.route('/demo/clear', methods=['DELETE'])
+def clear_demo_alerts():
+    """Clear all demo alerts"""
+    try:
+        # Find and remove demo alerts
+        demo_alerts = [a for a in alerts_storage if a.get('metadata', {}).get('demo') == True]
+        for alert in demo_alerts:
+            alerts_storage.remove(alert)
+
+        return jsonify({
+            'success': True,
+            'cleared_count': len(demo_alerts),
+            'message': f'Successfully cleared {len(demo_alerts)} demo alerts'
+        })
+
+    except Exception as e:
+        logger.error(f"Error clearing demo alerts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error clearing demo alerts: {str(e)}',
+            'error': str(e)
+        }), 500
+
 def send_alert_notifications(alert):
     """Send alert notifications to configured channels"""
     try:
-        # This would integrate with Slack, email, or other notification services
-        # For now, just log the alert
+        # Log the alert
         logger.info(f"Alert notification: {alert['severity'].upper()} - {alert['title']}: {alert['message']}")
-        
-        # TODO: Implement actual notification sending
-        # - Slack webhook
-        # - Email via SMTP
-        # - Webhook to external systems
-        
+
+        # Send to Slack if configured
+        slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
+
+        if slack_webhook_url:
+            try:
+                # Format message based on severity
+                severity_emoji = {
+                    'critical': '🚨',
+                    'high': '⚠️',
+                    'medium': '⚡',
+                    'low': 'ℹ️',
+                    'info': '📢'
+                }.get(alert.get('severity', 'info'), '📢')
+
+                # Create Slack message payload
+                slack_message = {
+                    "username": "CI/CD Monitor",
+                    "icon_emoji": ":robot_face:",
+                    "text": f"{severity_emoji} *{alert['severity'].upper()} ALERT*",
+                    "attachments": [
+                        {
+                            "color": {
+                                'critical': 'danger',
+                                'high': 'warning',
+                                'medium': 'good',
+                                'low': '#808080',
+                                'info': '#439FE0'
+                            }.get(alert.get('severity', 'info'), '#439FE0'),
+                            "fields": [
+                                {
+                                    "title": "Title",
+                                    "value": alert['title'],
+                                    "short": True
+                                },
+                                {
+                                    "title": "Status",
+                                    "value": alert.get('status', 'active').title(),
+                                    "short": True
+                                },
+                                {
+                                    "title": "Category",
+                                    "value": alert.get('category', 'general').title(),
+                                    "short": True
+                                },
+                                {
+                                    "title": "Source",
+                                    "value": alert.get('source', 'manual').title(),
+                                    "short": True
+                                }
+                            ],
+                            "text": alert['message'],
+                            "footer": "CI/CD Pipeline Monitor",
+                            "ts": datetime.utcnow().timestamp()
+                        }
+                    ]
+                }
+
+                # Send webhook request
+                response = requests.post(
+                    slack_webhook_url,
+                    json=slack_message,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Slack webhook notification sent successfully for alert {alert['id']}")
+                else:
+                    logger.error(f"Slack webhook failed with status {response.status_code}: {response.text}")
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error sending Slack webhook notification: {str(e)}")
+            except Exception as e:
+                logger.error(f"Unexpected error sending Slack notification: {str(e)}")
+        else:
+            logger.warning("Slack not configured - SLACK_WEBHOOK_URL missing")
+
+        # TODO: Implement email notifications
+        # TODO: Implement webhook notifications to external systems
+
     except Exception as e:
         logger.error(f"Error sending alert notifications: {str(e)}")
 

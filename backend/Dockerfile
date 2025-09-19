@@ -41,8 +41,7 @@ FROM python:3.9-slim
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_ENV=production
 ENV FLASK_APP=app.py
-
-WORKDIR /app
+ENV PYTHONPATH=/app/backend
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -59,6 +58,9 @@ COPY --from=backend-builder /app/backend ./backend
 # Copy built frontend
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
+# Set working directory to backend
+WORKDIR /app/backend
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
@@ -73,4 +75,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
 # Run the application
-CMD ["python", "backend/app.py"]
+CMD ["python", "app.py"]

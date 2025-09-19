@@ -13,7 +13,8 @@ def create_app(config_name='development'):
     app = Flask(__name__)
     
     # Configuration
-    app.config.from_object(f'config.{config_name.capitalize()}Config')
+    from config import config
+    app.config.from_object(config.get(config_name, config['default']))
     
     # Initialize extensions
     CORS(app)

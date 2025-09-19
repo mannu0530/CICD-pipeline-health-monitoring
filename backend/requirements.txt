@@ -5,7 +5,6 @@ pymongo==4.5.0
 redis==5.0.1
 celery==5.3.4
 PyJWT==2.8.0
-slack-sdk==3.21.3
 requests==2.31.0
 python-dotenv==1.0.0
 gunicorn==21.2.0

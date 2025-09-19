@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 import logging
-from ...services import IntegrationService
+from services import IntegrationService
 
 bp = Blueprint('metrics', __name__, url_prefix='/api/v1/metrics')
 

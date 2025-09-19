@@ -4,7 +4,7 @@ import logging
 import hmac
 import hashlib
 import json
-from ...services import IntegrationService
+from services import IntegrationService
 
 bp = Blueprint('webhooks', __name__, url_prefix='/api/v1/webhooks')
 
@@ -389,7 +389,7 @@ def process_jenkins_job(payload):
 def create_workflow_failure_alert(source, repository, workflow, run_number, run_id):
     """Create alert for workflow failure"""
     try:
-        from .alerts import create_alert
+        from alerts import create_alert
         
         alert_data = {
             'title': f'{source.title()} Workflow Failed',
@@ -414,8 +414,8 @@ def create_workflow_failure_alert(source, repository, workflow, run_number, run_
 def create_pipeline_failure_alert(source, project, pipeline_id, ref):
     """Create alert for pipeline failure"""
     try:
-        from .alerts import create_alert
-        
+        from alerts import create_alert
+
         alert_data = {
             'title': f'{source.title()} Pipeline Failed',
             'message': f'Pipeline #{pipeline_id} failed in {project} on {ref}',
@@ -438,8 +438,8 @@ def create_pipeline_failure_alert(source, project, pipeline_id, ref):
 def create_build_failure_alert(source, job, build_number):
     """Create alert for build failure"""
     try:
-        from .alerts import create_alert
-        
+        from alerts import create_alert
+
         alert_data = {
             'title': f'{source.title()} Build Failed',
             'message': f'Build #{build_number} failed for job {job}',
