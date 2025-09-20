@@ -433,6 +433,100 @@ The project serves as a successful example of how AI tools can be effectively in
 - Performance optimization
 - Security validation
 
+### 12.5 Infrastructure as Code & Cloud Deployment Prompts
+- Terraform infrastructure provisioning
+- AWS resource configuration
+- Docker deployment automation
+- Cloud security setup
+
+## 13. Infrastructure as Code Implementation
+
+### 13.1 Terraform Infrastructure Setup
+**Prompt Used:**
+```
+"Generate Terraform configuration for AWS provider with region variable for deploying infrastructure on AWS."
+```
+
+**AI Response**: Created provider.tf with AWS provider configuration and region variable.
+
+**Key Benefits**:
+- Standardized AWS provider setup
+- Configurable region deployment
+- Version management for Terraform providers
+
+### 13.2 VPC and Networking Resources
+**Prompt Used:**
+```
+"Write Terraform code to create a VPC with public subnet, internet gateway, and route table for AWS deployment."
+```
+
+**AI Response**: Generated vpc.tf with complete networking infrastructure including VPC, subnet, IGW, and routing.
+
+**Key Benefits**:
+- Secure network isolation
+- Public accessibility for web application
+- Proper routing configuration
+- AWS best practices implementation
+
+### 13.3 Security Group Configuration
+**Prompt Used:**
+```
+"Create AWS security group Terraform resource allowing SSH, HTTP, and HTTPS traffic for a web application."
+```
+
+**AI Response**: Created security_group.tf with appropriate ingress rules for web application access.
+
+**Key Benefits**:
+- Minimal attack surface
+- Essential port access
+- Security best practices
+- Configurable access rules
+
+### 13.4 EC2 Instance with Auto-Deployment
+**Prompt Used:**
+```
+"Generate Terraform EC2 instance resource with user data script to install Docker, clone GitHub repo, and run docker-compose for a containerized app."
+```
+
+**AI Response**: Implemented ec2.tf with automated deployment script in user data.
+
+**Key Benefits**:
+- Automated deployment process
+- Container orchestration
+- Infrastructure as code principles
+- Consistent environment setup
+
+### 13.5 Deployment Documentation
+**Prompt Used:**
+```
+"Write a deployment guide explaining how to use Terraform to provision AWS infrastructure and deploy a containerized application."
+```
+
+**AI Response**: Created comprehensive deployment.md with step-by-step instructions.
+
+**Key Benefits**:
+- Clear operational procedures
+- Troubleshooting guidance
+- Security considerations
+- Maintenance instructions
+
+### 13.6 AI Workflow Documentation
+**Prompt Used:**
+```
+"Document the AI prompts used for generating Terraform infrastructure and deployment automation."
+```
+
+**AI Response**: Created prompts.md documenting the AI-assisted development process.
+
+**Key Benefits**:
+- Transparency in AI usage
+- Reproducible development process
+- Knowledge sharing
+- Process improvement insights
+
+---
+
+**Note**: This document serves as a comprehensive record of AI tool usage and can be used as a reference for future projects and team training.
 ### 12.4 Deployment Prompts
 - Containerization
 - Environment configuration
