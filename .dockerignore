@@ -2,11 +2,7 @@
 .git
 .gitignore
 
-# Documentation
-*.md
-docs/
-
-# Environment files
+# Environment files (keep env.example for reference)
 .env
 .env.local
 .env.production
@@ -14,38 +10,83 @@ docs/
 # Logs
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Node modules (for frontend)
+# Node modules (exclude from build context)
 frontend/node_modules/
-frontend/npm-debug.log*
+frontend/.next/
+frontend/out/
 
-# Python cache
+# Python cache and compiled files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 *.so
+backend/__pycache__/
+backend/*.pyc
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS files
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Docker
-Dockerfile*
-docker-compose*
+# Database volumes (created at runtime)
+mongodb_data/
+redis_data/
+
+# SSL certificates (generated at runtime)
+nginx/ssl/
+
+# Build artifacts (will be rebuilt in containers)
+frontend/build/
+frontend/dist/
+
+# Docker files (not needed in build context)
+Dockerfile.dev
+docker-compose.override.yml
 .dockerignore
 
-# Scripts
-setup.sh
-*.sh
+# Development and testing files
+.coverage
+.pytest_cache/
+.nyc_output
+.cache
+.parcel-cache
+.eslintcache
 
-# Temporary files
+# Secrets and keys
+secrets/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# Backup and temporary files
+*.backup
+*.old
 *.tmp
 *.temp
+*.bak
+
+# Documentation (keep important docs but exclude generated)
+docs/_build/
+docs/build/
+
+# Local development files
+.local
